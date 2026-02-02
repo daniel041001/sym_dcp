@@ -1,0 +1,1 @@
+idx	ax	ay	az	px	py	pz	chamfer	min_gt_dist
