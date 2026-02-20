@@ -1,4 +1,4 @@
-# Deep Closest Point 
+# 3D Symmetry Analysis
 
 ## Prerequisites 
 PyTorch>=1.0: https://pytorch.org
@@ -14,7 +14,7 @@ tqdm
 TensorboardX: https://github.com/lanpa/tensorboardX
 
 ## Environment Setting
-'''
+```
 conda create -n symmetry python=3.10 -y
 conda activate symmetry
 
@@ -29,7 +29,7 @@ python -c "import torch, scipy, numpy, h5py, tqdm, tensorboardX; print('OK')"
 git clone https://github.com/facebookresearch/pytorch3d.git
 cd pytorch3d
 pip install -e . --no-build-isolation
-'''
+```
 
 ## Inference
 
