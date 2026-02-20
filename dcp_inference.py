@@ -356,7 +356,7 @@ def _planes_from_pairs(ref_corr: np.ndarray, src_corr: np.ndarray, reflection_ma
     inlier_matrix = torch.zeros((n_pairs, n_pairs), dtype=torch.bool, device=device)
     batch_size = 128  # Process 128 planes at a time (reduced to save memory)
     if count_entire:
-        entire_inlier_matrix = torch.zeros((n_pairs), dtype=torch.int, device=device)
+        entire_inlier_matrix = torch.zeros((n_pairs), dtype=torch.int64, device=device)
     
     for start_idx in range(0, n_pairs, batch_size):
         end_idx = min(start_idx + batch_size, n_pairs)
@@ -404,7 +404,7 @@ def _planes_from_pairs(ref_corr: np.ndarray, src_corr: np.ndarray, reflection_ma
         
         # Find plane with maximum inliers among available pairs
         if count_entire:
-            best_idx = torch.argmax(entire_inlier_matrix[available_mask]).item()
+            best_idx = np.argmax(entire_inlier_matrix.cpu().numpy() * available_mask).item()
         else:
             available_inliers = inlier_matrix[:, available_mask].sum(dim=1).cpu().numpy()
             best_idx = np.argmax(available_inliers)
