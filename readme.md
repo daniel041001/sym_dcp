@@ -13,46 +13,27 @@ tqdm
 
 TensorboardX: https://github.com/lanpa/tensorboardX
 
-## Training
+## Environment Setting
+'''
+conda create -n symmetry python=3.10 -y
+conda activate symmetry
 
-### DCP-v1
+export PATH=/usr/local/cuda-12.4/bin:$PATH
+export LD_LIBRARY_PATH=/usr/local/cuda-12.4/lib64:$LD_LIBRARY_PATH
+export CUDA_HOME=/usr/local/cuda-12.4
+conda install pytorch torchvision torchaudio pytorch-cuda=12.4 -c pytorch -c nvidia
+conda install scipy numpy h5py tqdm -y
+pip install tensorboardX
+python -c "import torch, scipy, numpy, h5py, tqdm, tensorboardX; print('OK')"
 
-python main.py --exp_name=dcp_v1 --model=dcp --emb_nn=dgcnn --pointer=identity --head=svd
+git clone https://github.com/facebookresearch/pytorch3d.git
+cd pytorch3d
+pip install -e . --no-build-isolation
+'''
 
-### DCP-v2
+## Inference
 
-python main.py --exp_name=dcp_v2 --model=dcp --emb_nn=dgcnn --pointer=transformer --head=svd
+### Reflection
+python dcp_inference.py --count_entire
 
-## Testing
-
-### DCP-v1
-
-python main.py --exp_name=dcp_v1 --model=dcp --emb_nn=dgcnn --pointer=identity --head=svd --eval
-
-or 
-
-python main.py --exp_name=dcp_v1 --model=dcp --emb_nn=dgcnn --pointer=identity --head=svd --eval --model_path=xx/yy
-
-### DCP-v2
-
-python main.py --exp_name=dcp_v2 --model=dcp --emb_nn=dgcnn --pointer=transformer --head=svd --eval
-
-or 
-
-python main.py --exp_name=dcp_v2 --model=dcp --emb_nn=dgcnn --pointer=transformer --head=svd --eval --model_path=xx/yy
-
-where xx/yy is the pretrained model
-
-## Citation
-Please cite this paper if you want to use it in your work,
-
-	@InProceedings{Wang_2019_ICCV,
-	  title={Deep Closest Point: Learning Representations for Point Cloud Registration},
-	  author={Wang, Yue and Solomon, Justin M.},
-	  booktitle = {The IEEE International Conference on Computer Vision (ICCV)},
-	  month = {October},
-	  year={2019}
-	}
-
-## License
-MIT License
+### Rotation

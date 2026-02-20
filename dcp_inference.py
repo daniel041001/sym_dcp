@@ -308,7 +308,8 @@ def load_preprocessed_dataset(dataset_root: str) -> Tuple[np.ndarray, list]:
 @torch.no_grad()
 def _planes_from_pairs(ref_corr: np.ndarray, src_corr: np.ndarray, reflection_matrix: np.ndarray,
                        point_cloud: torch.Tensor, device: torch.device,
-                       inlier_dist_threshold: float = 0.01, num_iterations: int = 100
+                       inlier_dist_threshold: float = 0.01, num_iterations: int = 100,
+                       count_entire: bool = False, refinement_criteria: float = 10.0,
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """
     RANSAC-style plane extraction from correspondence pairs.
@@ -351,8 +352,11 @@ def _planes_from_pairs(ref_corr: np.ndarray, src_corr: np.ndarray, reflection_ma
     M_src_torch = torch.from_numpy(M_src).to(device, dtype=torch.float32)  # (N, 3)
     
     # Compute inlier matrix in batches to avoid OOM
+    ### RANSAC inlier counting
     inlier_matrix = torch.zeros((n_pairs, n_pairs), dtype=torch.bool, device=device)
     batch_size = 128  # Process 128 planes at a time (reduced to save memory)
+    if count_entire:
+        entire_inlier_matrix = torch.zeros((n_pairs), dtype=torch.int, device=device)
     
     for start_idx in range(0, n_pairs, batch_size):
         end_idx = min(start_idx + batch_size, n_pairs)
@@ -378,20 +382,31 @@ def _planes_from_pairs(ref_corr: np.ndarray, src_corr: np.ndarray, reflection_ma
         avg_dist = (dist1 + dist2) / 2.0  # (B, N)
         
         inlier_matrix[start_idx:end_idx, :] = avg_dist < inlier_dist_threshold  # (B, N)
+
+        if count_entire:
+            pcd_shifted = point_cloud.unsqueeze(0) - shifts.unsqueeze(1)  # (B, M, 3) -> M=2048
+            pcd_reflected = torch.bmm(pcd_shifted, H_chunk)  # (B, M, 3)
+            # Count inliers for each plane
+            pcd_inlier_matrix = torch.cdist(pcd_reflected, pcd_shifted, p=2) < inlier_dist_threshold  # (B, M, M)
+            entire_inlier_matrix[start_idx:end_idx] = pcd_inlier_matrix.sum(dim=(1,2))  # (B,)
     
-    # RANSAC iterations
+    ### RANSAC refinement iterations
     available_mask = np.ones(n_pairs, dtype=bool)
     result_normals, result_ds, result_centers = [], [], []
+    if refinement_criteria != 10.0:
+        criteria_threshold = int(n_pairs * refinement_criteria / 100.0)
+    else:
+        criteria_threshold = 10  # default to 10 pairs if not specified
     
     for _ in range(num_iterations):
-        if not available_mask.any() or available_mask.sum() < 10:
+        if not available_mask.any() or available_mask.sum() < criteria_threshold:
             break
         
         # Find plane with maximum inliers among available pairs
         available_inliers = inlier_matrix[:, available_mask].sum(dim=1).cpu().numpy()
         best_idx = np.argmax(available_inliers)
         
-        if available_inliers[best_idx] < 10:
+        if available_inliers[best_idx] < criteria_threshold and not count_entire:
             break
         
         # Get inlier pairs (only from available pairs)
@@ -469,6 +484,8 @@ def evaluate_reflection_symmetry_by_correspondence(
     inference_model: DCPInference,
     dist_threshold: float = 0.05,
     chamfer_threshold: float = 1e-3,
+    count_entire: bool = False,
+    refinement_criteria: float = 10.0,
 ) -> Tuple[float, float, float, float]:
     """
     Evaluate reflection symmetry detection using DCP correspondences.
@@ -558,7 +575,8 @@ def evaluate_reflection_symmetry_by_correspondence(
         # Use identity matrix since src_corr_all is already transformed to original space
         I_matrix = np.eye(3, dtype=np.float32)
         n_np, d_np, _, chamfer_np = _planes_from_pairs(ref_corr_all, src_corr_all, I_matrix, X_orig, device, 
-                                                        inlier_dist_threshold=0.007, num_iterations=100)
+                                                        inlier_dist_threshold=0.007, num_iterations=100,
+                                                        count_entire=count_entire, refinement_criteria=refinement_criteria)
 
         # Process planes if any found
         if n_np.shape[0] > 0:
@@ -713,6 +731,10 @@ def main():
                         help='Head type')
     parser.add_argument('--emb_dims', type=int, default=512,
                         help='Embedding dimensions')
+    parser.add_argument('--count_entire', action='store_true',
+                        help='Count all point pair for inlier counting instead of counting on putative matches')
+    parser.add_argument('--refinement_criteria', type=float, default=10.0,
+                        help='Criteria for iterative RANSAC refinement (not used in current implementation)')
     
     args = parser.parse_args()
     
@@ -742,7 +764,9 @@ def main():
     precision, recall, f1, avg_ch = evaluate_reflection_symmetry_by_correspondence(
         pcs, labels, [], infer, 
         dist_threshold=args.dist_threshold, 
-        chamfer_threshold=args.chamfer_threshold
+        chamfer_threshold=args.chamfer_threshold,
+        count_entire=args.count_entire,
+        refinement_criteria=args.refinement_criteria
     )
     
     print(f"Precision: {precision:.4f}")
