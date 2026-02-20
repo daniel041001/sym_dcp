@@ -394,7 +394,7 @@ def _planes_from_pairs(ref_corr: np.ndarray, src_corr: np.ndarray, reflection_ma
     available_mask = np.ones(n_pairs, dtype=bool)
     result_normals, result_ds, result_centers = [], [], []
     if refinement_criteria != 10.0:
-        criteria_threshold = int(n_pairs * refinement_criteria / 100.0)
+        criteria_threshold = n_pairs * refinement_criteria / 100.0
     else:
         criteria_threshold = 10  # default to 10 pairs if not specified
     
@@ -403,11 +403,14 @@ def _planes_from_pairs(ref_corr: np.ndarray, src_corr: np.ndarray, reflection_ma
             break
         
         # Find plane with maximum inliers among available pairs
-        available_inliers = inlier_matrix[:, available_mask].sum(dim=1).cpu().numpy()
-        best_idx = np.argmax(available_inliers)
+        if count_entire:
+            best_idx = torch.argmax(entire_inlier_matrix[available_mask]).item()
+        else:
+            available_inliers = inlier_matrix[:, available_mask].sum(dim=1).cpu().numpy()
+            best_idx = np.argmax(available_inliers)
         
-        if available_inliers[best_idx] < criteria_threshold and not count_entire:
-            break
+            if available_inliers[best_idx] < criteria_threshold:
+                break
         
         # Get inlier pairs (only from available pairs)
         inlier_local = inlier_matrix[best_idx, :].cpu().numpy() & available_mask
