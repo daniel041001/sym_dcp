@@ -34,6 +34,11 @@ pip install -e . --no-build-isolation
 ## Inference
 
 ### Reflection
-python dcp_inference.py --count_entire
+```
+python dcp_inference.py --count_entire --device cuda:0 --refinement_criteria 10
+```
 
 ### Rotation
+```
+python dcp_inference_rot.py
+```
