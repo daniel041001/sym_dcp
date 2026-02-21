@@ -393,6 +393,7 @@ def _planes_from_pairs(ref_corr: np.ndarray, src_corr: np.ndarray, reflection_ma
     ### RANSAC refinement iterations
     available_mask = np.ones(n_pairs, dtype=bool)
     result_normals, result_ds, result_centers = [], [], []
+    
     if refinement_criteria != 10.0:
         criteria_threshold = n_pairs * refinement_criteria / 100.0
     else:

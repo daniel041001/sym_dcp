@@ -202,127 +202,8 @@ def _rotations_from_pairs_gpu(
     chamfers = torch.cat(chamfers_list, dim=0).numpy().astype(np.float32)
     return axes, angles, chamfers
  
- 
-class DCPInference:
-    """
-    DCP 모델을 사용한 inference wrapper
-    Correspondence를 추출할 수 있도록 확장
-    """
- 
-    def __init__(self, model_path: str, device: str = 'cuda:0', args=None,
-                 emb_nn: str = 'dgcnn', pointer: str = 'transformer',
-                 head: str = 'svd', emb_dims: int = 2048):
-        self.device = torch.device(device if torch.cuda.is_available() else 'cpu')
- 
-        if args is None:
-            class Args:
-                def __init__(self):
-                    self.emb_nn = emb_nn
-                    self.pointer = pointer
-                    self.head = head
-                    self.emb_dims = emb_dims
-                    self.n_blocks = 1
-                    self.n_heads = 4
-                    self.ff_dims = 1024
-                    self.dropout = 0.0
-                    self.cycle = False
-            args = Args()
- 
-        self.args = args
-        self.model = DCP(args).to(self.device)
-        self.model.eval()
- 
-        if not os.path.isabs(model_path):
-            if os.path.isfile(model_path):
-                model_path = os.path.abspath(model_path)
-            elif os.path.isfile(osp.join(osp.dirname(__file__), model_path)):
-                model_path = osp.join(osp.dirname(__file__), model_path)
-            elif os.path.isfile(osp.join(osp.dirname(__file__), 'pretrained', os.path.basename(model_path))):
-                model_path = osp.join(osp.dirname(__file__), 'pretrained', os.path.basename(model_path))
- 
-        if os.path.isfile(model_path):
-            checkpoint = torch.load(model_path, map_location=self.device)
-            if isinstance(checkpoint, dict) and 'model' in checkpoint:
-                self.model.load_state_dict(checkpoint['model'], strict=False)
-            else:
-                self.model.load_state_dict(checkpoint, strict=False)
-            print(f"Loaded DCP weights from {model_path}")
-        else:
-            raise FileNotFoundError(
-                f"Model file not found: {model_path}\n"
-                f"Please check the path. Available models in pretrained/: "
-                f"{os.listdir(osp.join(osp.dirname(__file__), 'pretrained')) if osp.exists(osp.join(osp.dirname(__file__), 'pretrained')) else 'N/A'}"
-            )
- 
-    @torch.no_grad()
-    def get_correspondences(
-        self,
-        src_points: np.ndarray,
-        tgt_points: np.ndarray,
-        return_scores: bool = False
-    ) -> tuple:
-        src_tensor = torch.from_numpy(src_points.astype(np.float32)).T.unsqueeze(0).to(self.device)  # (1,3,N)
-        tgt_tensor = torch.from_numpy(tgt_points.astype(np.float32)).T.unsqueeze(0).to(self.device)  # (1,3,M)
- 
-        src_embedding = self.model.emb_nn(src_tensor)
-        tgt_embedding = self.model.emb_nn(tgt_tensor)
- 
-        src_embedding_p, tgt_embedding_p = self.model.pointer(src_embedding, tgt_embedding)
-        src_embedding = src_embedding + src_embedding_p
-        tgt_embedding = tgt_embedding + tgt_embedding_p
- 
-        d_k = src_embedding.size(1)
-        scores = torch.matmul(src_embedding.transpose(2, 1).contiguous(), tgt_embedding) / np.sqrt(d_k)  # (1,N,M)
- 
-        # geometric prefilter
-        src_pts = src_tensor.squeeze(0).transpose(0, 1)  # (N,3)
-        tgt_pts = tgt_tensor.squeeze(0).transpose(0, 1)  # (M,3)
-        dists = torch.norm(src_pts.unsqueeze(1) - tgt_pts.unsqueeze(0), dim=2)  # (N,M)
-        min_radius = 0.1
-        scores = scores.masked_fill(~(dists >= min_radius).unsqueeze(0), -1e9)
- 
-        scores = torch.softmax(scores, dim=2).squeeze(0)  # (N,M)
- 
-        topk = 40
- 
-        _, src_topk_indices = scores.topk(k=topk, dim=1)
-        src_corr_mat = torch.zeros_like(scores, dtype=torch.bool)
-        src_indices = torch.arange(scores.shape[0], device=scores.device).unsqueeze(1).expand(-1, topk)
-        src_corr_mat[src_indices, src_topk_indices] = True
- 
-        _, tgt_topk_indices = scores.topk(k=topk, dim=0)
-        tgt_corr_mat = torch.zeros_like(scores, dtype=torch.bool)
-        tgt_indices = torch.arange(scores.shape[1], device=scores.device).unsqueeze(0).expand(topk, -1)
-        tgt_corr_mat[tgt_topk_indices, tgt_indices] = True
- 
-        mutual = torch.logical_and(src_corr_mat, tgt_corr_mat)
-        si, ti = torch.nonzero(mutual, as_tuple=True)
-        conf = scores[si, ti]
- 
-        min_confidence = 0.005
-        keep = conf > min_confidence
-        si, ti = si[keep], ti[keep]
- 
-        src_np = src_tensor.squeeze(0).T.cpu().numpy()
-        tgt_np = tgt_tensor.squeeze(0).T.cpu().numpy()
- 
-        src_corr = src_np[si.cpu().numpy()]
-        tgt_corr = tgt_np[ti.cpu().numpy()]
- 
-        if return_scores:
-            return src_corr, tgt_corr, scores.cpu().numpy()
-        return src_corr, tgt_corr
- 
-    @torch.no_grad()
-    def get_transformation(self, src_points: np.ndarray, tgt_points: np.ndarray) -> tuple:
-        src_tensor = torch.from_numpy(src_points.astype(np.float32)).T.unsqueeze(0).to(self.device)
-        tgt_tensor = torch.from_numpy(tgt_points.astype(np.float32)).T.unsqueeze(0).to(self.device)
-        rotation, translation, _, _ = self.model(src_tensor, tgt_tensor)
-        return rotation.squeeze(0).cpu().numpy(), translation.squeeze(0).cpu().numpy()
- 
- 
 def get_correspondences(
-    inference_model: DCPInference,
+    inference_model: None,
     point_cloud: np.ndarray,
     rotation_matrix: np.ndarray,
     return_scores: bool = False
@@ -338,123 +219,12 @@ def get_correspondences(
     else:
         base_corr, rotated_corr = inference_model.get_correspondences(base, rotated, return_scores=False)
         return base, rotated, base_corr, rotated_corr
- 
- 
-# -----------------------------
-# NEW: multi-shape toy dataset
-# -----------------------------
-def generate_toy_dataset(
-    per_class: int = 50,
-    num_points: int = 2048,
-    seed: int = 42,
-    n_sides_list: List[int] = [3, 4, 5, 6],
-    apex_height: float = 1.5,
-    trans_range: float = 0.5,
-) -> Tuple[np.ndarray, List[List[np.ndarray]], List[int]]:
-    """
-    Regular n-gonal pyramid dataset (4 classes).
-      - n_sides=3: triangular pyramid (정삼각뿔)
-      - n_sides=4: square pyramid (정사각뿔)
-      - n_sides=5: pentagonal pyramid (정오각뿔)
-      - n_sides=6: hexagonal pyramid (정육각뿔)
- 
-    Each sample: random SE(3) applied (hard case)
-    GT: axis in WORLD coords + all non-trivial rotation angles 2πk/n, k=1..n-1
- 
-    Returns:
-      pcs: (total, N, 3)
-      labels: list length total, each is list of [axis(3)+angle(1)]
-      meta_n: list length total, n_sides per sample
-    """
-    np.random.seed(seed)
- 
-    def random_rotation_matrix() -> np.ndarray:
-        A = np.random.randn(3, 3).astype(np.float32)
-        Q, _ = np.linalg.qr(A)
-        if np.linalg.det(Q) < 0:
-            Q[:, -1] *= -1
-        return Q.astype(np.float32)
- 
-    def generate_ngonal_pyramid(n_sides: int, n_points: int) -> np.ndarray:
-        # Regular n-gon base on z=0
-        angles = np.linspace(0, 2 * np.pi, n_sides, endpoint=False).astype(np.float32) + np.pi / 2
-        base_vertices = np.column_stack([
-            np.cos(angles),
-            np.sin(angles),
-            np.zeros(n_sides, dtype=np.float32),
-        ]).astype(np.float32)
- 
-        base_center = np.array([0.0, 0.0, 0.0], dtype=np.float32)
-        apex = np.array([0.0, 0.0, apex_height], dtype=np.float32)
- 
-        # Sampling budget
-        n_base = int(n_points * 0.35)
-        n_lateral = n_points - n_base
- 
-        pts = []
- 
-        # Base (fan triangulation)
-        for _ in range(n_base):
-            i = np.random.randint(n_sides)
-            v0 = base_center
-            v1 = base_vertices[i]
-            v2 = base_vertices[(i + 1) % n_sides]
-            r1, r2 = np.random.rand(2).astype(np.float32)
-            if r1 + r2 > 1:
-                r1, r2 = 1 - r1, 1 - r2
-            pts.append(r1 * v0 + r2 * v1 + (1 - r1 - r2) * v2)
- 
-        # Lateral faces
-        for _ in range(n_lateral):
-            i = np.random.randint(n_sides)
-            v0 = apex
-            v1 = base_vertices[i]
-            v2 = base_vertices[(i + 1) % n_sides]
-            r1, r2 = np.random.rand(2).astype(np.float32)
-            if r1 + r2 > 1:
-                r1, r2 = 1 - r1, 1 - r2
-            pts.append(r1 * v0 + r2 * v1 + (1 - r1 - r2) * v2)
- 
-        pts = np.array(pts, dtype=np.float32)
-        pts = pts - pts.mean(axis=0, keepdims=True)
-        return pts
- 
-    pcs: List[np.ndarray] = []
-    labels: List[List[np.ndarray]] = []
-    meta_n: List[int] = []
- 
-    for n_sides in n_sides_list:
-        for _ in range(per_class):
-            base_pc = generate_ngonal_pyramid(n_sides, num_points)
- 
-            # Hard case: random SE(3)
-            Rw = random_rotation_matrix()
-            tw = np.random.uniform(-trans_range, trans_range, size=(3,)).astype(np.float32)
-            pc_world = (Rw @ base_pc.T).T + tw
- 
-            pcs.append(pc_world.astype(np.float32))
-            meta_n.append(n_sides)
- 
-            # GT axis in WORLD coords (local +Z rotated by Rw)
-            z_local = np.array([0.0, 0.0, 1.0], dtype=np.float32)
-            z_world = (Rw @ z_local.reshape(3, 1)).reshape(3).astype(np.float32)
-            z_world = z_world / (np.linalg.norm(z_world) + 1e-8)
- 
-            # GT angles: all non-trivial rotations around axis
-            gt_list = []
-            for k in range(1, n_sides):
-                ang = (2.0 * np.pi * k) / float(n_sides)
-                gt_list.append(np.concatenate([z_world, np.array([ang], dtype=np.float32)]))
-            labels.append(gt_list)
- 
-    return np.array(pcs, dtype=np.float32), labels, meta_n
- 
- 
+  
 @torch.no_grad()
 def evaluate_rotation_symmetry_by_correspondence(
     point_clouds: np.ndarray,
     gt_labels: List[List[np.ndarray]],
-    inference_model: DCPInference,
+    inference_model: None,
     dist_threshold: float = 0.05,
     chamfer_threshold: float = 0.01,
 ) -> Tuple[float, float, float, float]:
@@ -634,6 +404,7 @@ def main():
     if args.model_path is None:
         parser.error("--model_path is required. Available models: pretrained/dcp_v1.t7, pretrained/dcp_v2.t7")
  
+    from model.DCP import DCPInference
     infer = DCPInference(
         args.model_path,
         device=args.device,
@@ -645,6 +416,7 @@ def main():
  
     print(f"Generating toy dataset: n-gonal pyramids (3/4/5/6) x {args.per_class} each "
           f"= {4*args.per_class} samples, {args.num_points} points each...")
+    from data.generate_rotation_synthetic_data import generate_toy_dataset
     pcs, labels, meta_n = generate_toy_dataset(
         per_class=args.per_class,
         num_points=args.num_points,
