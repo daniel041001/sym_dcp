@@ -4,7 +4,7 @@ import os.path as osp
 import numpy as np
 import torch
 
-from .DCP_model import DCP
+from .DCP_base_model import DCP
 
 class DCPInference:
     """
