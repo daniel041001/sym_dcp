@@ -110,7 +110,7 @@ def main():
         print(f"Saved sample for viewing: {sample_path}")
 
     else:
-        cache_path = args.cache_file or osp.join(script_dir, 'shapenet_rot_gt_cache.pkl')
+        cache_path = args.cache_file or osp.join(script_dir, 'data', 'shapenet_rot_gt_cache.pkl')
 
         # 캐시 있으면 로드, 없으면 dataset_root + mesh_root 로 빌드 후 사용 (name_list.txt 불필요)
         if osp.isfile(cache_path):
