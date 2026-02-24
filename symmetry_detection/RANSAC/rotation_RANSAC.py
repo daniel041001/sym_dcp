@@ -50,7 +50,7 @@ def _rotations_from_pairs_gpu(
     # Precompute transposes for faster matmul
     P_all_t = P_all.t().contiguous()  # (3,N)
     Q_all_t = Q_all.t().contiguous()  # (3,N)
- 
+
     for _ in range(num_batches):
         # sample seeds: (B, K)
         idx = torch.randint(0, n, (batch_hyp, seed_pairs), device=device)

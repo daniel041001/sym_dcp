@@ -5,10 +5,12 @@ import numpy as np
 import torch
 from tqdm import tqdm
 
-try:
-    from .RANSAC.rotation_RANSAC import _rotations_from_pairs_gpu
-except ImportError:
-    from symmetry_detection.RANSAC.rotation_RANSAC import _rotations_from_pairs_gpu
+# try:
+#     from .RANSAC.rotation_RANSAC import _rotations_from_pairs_gpu
+# except ImportError:
+#     from symmetry_detection.RANSAC.rotation_RANSAC import _rotations_from_pairs_gpu
+
+from .RANSAC.rotation_RANSAC_JH import _rotations_from_pairs_gpu
 
 
 def get_correspondences(

@@ -80,3 +80,42 @@ def _axis_angle_from_R_batched(R: torch.Tensor) -> Tuple[torch.Tensor, torch.Ten
     axis = axis / (torch.linalg.norm(axis, dim=1, keepdim=True) + 1e-8)
     return axis, angle
  
+def save_vis(
+    point_cloud: torch.Tensor,
+    rotated_pcd: torch.Tensor,
+    save_dir: str = "vis_pcd",
+):
+    import os
+    import open3d as o3d
+    """
+    Save original + rotated point clouds as .pcd files.
+
+    point_cloud : (M,3)
+    rotated_pcd : (B,M,3)
+    """
+
+    os.makedirs(save_dir, exist_ok=True)
+
+    pc = point_cloud.detach().cpu().numpy()
+    B = rotated_pcd.shape[0]
+
+    # original cloud
+    pcd_ref = o3d.geometry.PointCloud()
+    pcd_ref.points = o3d.utility.Vector3dVector(pc)
+    pcd_ref.paint_uniform_color([0.2, 0.7, 1.0])  # blue
+
+    for i in range(B):
+        rot = rotated_pcd[i].detach().cpu().numpy()
+
+        pcd_rot = o3d.geometry.PointCloud()
+        pcd_rot.points = o3d.utility.Vector3dVector(rot)
+        pcd_rot.paint_uniform_color([1.0, 0.3, 0.3])  # red
+
+        combined = o3d.geometry.PointCloud()
+        combined += pcd_ref
+        combined += pcd_rot
+
+        filename = os.path.join(save_dir, f"rotation_{i:04d}.pcd")
+        o3d.io.write_point_cloud(filename, combined)
+
+    print(f"Saved {B} visualization files to {save_dir}")
