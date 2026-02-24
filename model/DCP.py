@@ -14,8 +14,9 @@ class DCPInference:
  
     def __init__(self, model_path: str, device: str = 'cuda:0', args=None,
                  emb_nn: str = 'dgcnn', pointer: str = 'transformer',
-                 head: str = 'svd', emb_dims: int = 2048):
+                 head: str = 'svd', emb_dims: int = 2048, topk: int = 40):
         self.device = torch.device(device if torch.cuda.is_available() else 'cpu')
+        self.topk = topk
  
         if args is None:
             class Args:
@@ -86,7 +87,7 @@ class DCPInference:
  
         scores = torch.softmax(scores, dim=2).squeeze(0)  # (N,M)
  
-        topk = 40
+        topk = self.topk
  
         _, src_topk_indices = scores.topk(k=topk, dim=1)
         src_corr_mat = torch.zeros_like(scores, dtype=torch.bool)

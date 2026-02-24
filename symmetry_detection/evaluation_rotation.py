@@ -10,7 +10,7 @@ from tqdm import tqdm
 # except ImportError:
 #     from symmetry_detection.RANSAC.rotation_RANSAC import _rotations_from_pairs_gpu
 
-from .RANSAC.rotation_RANSAC_JH import _rotations_from_pairs_gpu
+from .RANSAC.rotation_RANSAC import _rotations_from_pairs_gpu
 
 
 def get_correspondences(
@@ -87,7 +87,7 @@ def evaluate_rotation_symmetry_by_correspondence(
             rotated_corr_all,
             X_orig,
             device,
-            inlier_dist_threshold=0.01,
+            inlier_dist_threshold=0.007,
             num_iterations=50000,
             seed_pairs=3,
             batch_hyp=256,

@@ -1,5 +1,8 @@
 
-from typing import Tuple
+from typing import Tuple, Optional
+
+import os
+import os.path as osp
 
 import torch
 
@@ -119,3 +122,28 @@ def save_vis(
         o3d.io.write_point_cloud(filename, combined)
 
     print(f"Saved {B} visualization files to {save_dir}")
+
+def resolve_mesh_root(mesh_root_arg: Optional[str], script_dir: str, repo_root: str) -> Optional[str]:
+    """환경변수·기본 경로 후보를 순서대로 확인해 존재하는 디렉터리 반환."""
+    candidates = []
+    if mesh_root_arg and mesh_root_arg.strip():
+        candidates.append(osp.abspath(mesh_root_arg.strip()))
+    if os.environ.get('SHAPENET_ROOT'):
+        candidates.append(osp.abspath(os.environ['SHAPENET_ROOT']))
+    if os.environ.get('MESH_ROOT'):
+        candidates.append(osp.abspath(os.environ['MESH_ROOT']))
+    candidates.extend([
+        osp.join(repo_root, 'ShapeNetCore.v2'),
+        osp.join(repo_root, '..', 'ShapeNetCore.v2'),
+        osp.join(script_dir, 'ShapeNetCore.v2'),
+        osp.abspath(osp.join(os.getcwd(), 'ShapeNetCore.v2')),
+    ])
+    seen = set()
+    for p in candidates:
+        p = osp.abspath(p)
+        if p in seen:
+            continue
+        seen.add(p)
+        if osp.isdir(p):
+            return p
+    return None

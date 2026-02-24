@@ -17,6 +17,7 @@ import torch
 
 # SymmetryNet ShapeNet GT 로더 (원본 메시 → 포인트클라우드는 trimesh)
 from data.symmetrynet_shapenet_gt import build_shapenet_rot_cache
+from symmetry_detection.utils.utils import resolve_mesh_root
 
 def main():
     # Optional perf toggles (safe)
@@ -42,8 +43,8 @@ def main():
                         help=f'Path to DCP model weights (default: {default_model if default_model else "required"})')
     parser.add_argument('--device', type=str, default='cuda:0', help='Device to use')
     parser.add_argument('--num_points', type=int, default=2048, help='Number of points per point cloud')
-    parser.add_argument('--dist_threshold', type=float, default=0.1, help='Distance threshold for matching')
-    parser.add_argument('--chamfer_threshold', type=float, default=0.005, help='Chamfer distance threshold')
+    parser.add_argument('--dist_threshold', type=float, default=0.05, help='Distance threshold for matching')
+    parser.add_argument('--chamfer_threshold', type=float, default=0.0005, help='Chamfer distance threshold')
     parser.add_argument('--emb_nn', type=str, default='dgcnn', choices=['pointnet', 'dgcnn'], help='Embedding network type')
     parser.add_argument('--pointer', type=str, default='transformer', choices=['identity', 'transformer'], help='Pointer type')
     parser.add_argument('--head', type=str, default='svd', choices=['mlp', 'svd'], help='Head type')
@@ -117,12 +118,12 @@ def main():
             import pickle
             with open(cache_path, 'rb') as f:
                 data = pickle.load(f)
-            point_clouds = data['point_clouds']
-            gt_labels = data['gt_labels']
-            if args.max_samples is not None and len(point_clouds) > args.max_samples:
-                point_clouds = point_clouds[:args.max_samples]
-                gt_labels = gt_labels[:args.max_samples]
-            print(f"Loaded {len(point_clouds)} samples from cache")
+            pcs = data['point_clouds']
+            labels = data['gt_labels']
+            if args.max_samples is not None and len(pcs) > args.max_samples:
+                pcs = pcs[:args.max_samples]
+                labels = labels[:args.max_samples]
+            print(f"Loaded {len(pcs)} samples from cache")
         else:
             if args.dataset_root is None:
                 args.dataset_root = osp.join(script_dir, 'model_symmetry_extracted')
@@ -130,13 +131,13 @@ def main():
                 print(f"Error: dataset_root (model_symmetry) not found: {args.dataset_root}")
                 print("  Extract model_symmetry.zip to dcp/model_symmetry_extracted/ or set --dataset_root.")
                 sys.exit(1)
-            args.mesh_root = _resolve_mesh_root(args.mesh_root, script_dir, repo_root)
+            args.mesh_root = resolve_mesh_root(args.mesh_root, script_dir, repo_root)
             if not args.mesh_root:
                 print("Error: ShapeNet mesh root not found. Set --mesh_root or put ShapeNetCore.v2 in repo/dcp/.")
                 sys.exit(1)
             print("Cache not found. Building from model_symmetry + ShapeNetCore.v2...")
             try:
-                point_clouds, gt_labels = build_shapenet_rot_cache(
+                pcs, labels = build_shapenet_rot_cache(
                     args.dataset_root,
                     args.mesh_root,
                     cache_path,
@@ -146,14 +147,13 @@ def main():
             except Exception as e:
                 print(f"Error building cache: {e}")
                 sys.exit(1)
-            if args.max_samples is not None and len(point_clouds) > args.max_samples:
-                point_clouds = point_clouds[:args.max_samples]
-                gt_labels = gt_labels[:args.max_samples]
+            if args.max_samples is not None and len(pcs) > args.max_samples:
+                pcs = pcs[:args.max_samples]
+                labels = labels[:args.max_samples]
     
-    if len(point_clouds) == 0:
+    if len(pcs) == 0:
         print("Error: No samples in cache or built. Check dataset_root and mesh_root.")
         sys.exit(1)
-    breakpoint()
     
  
     from symmetry_detection.evaluation_rotation import evaluate_rotation_symmetry_by_correspondence
@@ -168,7 +168,7 @@ def main():
     print(f"Recall:    {recall:.4f}")
     print(f"F1:        {f1:.4f}")
     print(f"Chamfer:   {avg_ch:.6f}")
-    print(f"\nEvaluated {len(point_clouds)} samples with rotation symmetry GT")
+    print(f"\nEvaluated {len(pcs)} samples with rotation symmetry GT")
  
  
 if __name__ == '__main__':
