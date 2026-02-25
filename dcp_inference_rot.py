@@ -50,11 +50,16 @@ def main():
     parser.add_argument('--head', type=str, default='svd', choices=['mlp', 'svd'], help='Head type')
     parser.add_argument('--emb_dims', type=int, default=512, help='Embedding dimensions')
 
-    # Hyperparamters for RANSAC
+    # Hyperparamters
     parser.add_argument('--topk', type=int, default=40, help='Top-k correspondences from DCP to consider for RANSAC')
+    parser.add_argument('--removal_radius', type=float, default=0.1, help='remove the score of identity correspondences by removal_radius in chamfer distance (default: 0.1, set to 0 to disable)')
  
     # Synthetic dataset
     parser.add_argument('--synthetic', action='store_true', help='Use synthetic dataset instead of ShapeNet')
+    parser.add_argument('--per_class', type=int, default=50, help='Samples per shape (default 50 -> total 200)')
+    parser.add_argument('--seed', type=int, default=42, help='Random seed for dataset generation')
+    parser.add_argument('--apex_height', type=float, default=1.5, help='Apex height of pyramids')
+    parser.add_argument('--trans_range', type=float, default=0.5, help='Translation range for random SE(3)')
 
     # ShapeNet: 캐시 파일 있으면 그대로 로드, 없으면 dataset_root + mesh_root 로 빌드 후 저장
     parser.add_argument('--cache_file', type=str, default=None,
@@ -80,6 +85,7 @@ def main():
         head=args.head,
         emb_dims=args.emb_dims,
         topk=args.topk,
+        removal_radius=args.removal_radius,
     )
 
     if args.synthetic:
