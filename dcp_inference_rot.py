@@ -76,7 +76,7 @@ def main():
     if args.model_path is None:
         parser.error("--model_path is required. Available models: pretrained/dcp_v1.t7, pretrained/dcp_v2.t7")
  
-    from model.DCP import DCPInference
+    from model.DCP_rotation import DCPInference
     infer = DCPInference(
         args.model_path,
         device=args.device,
