@@ -16,6 +16,7 @@ def _planes_from_pairs(
     num_iterations: int = 100,
     count_entire: bool = False,
     refinement_criteria: float = 10.0,
+    available_inlier_threshold: int = 10,
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """
     RANSAC-style plane extraction from correspondence pairs.
@@ -81,17 +82,23 @@ def _planes_from_pairs(
     available_mask = np.ones(n_pairs, dtype=bool)
     result_normals, result_ds, result_centers = [], [], []
 
-    if refinement_criteria != 10.0:
-        criteria_threshold = n_pairs * refinement_criteria / 100.0
-    else:
-        criteria_threshold = 10
+    # if refinement_criteria != 10.0:
+    #     criteria_threshold = n_pairs * refinement_criteria / 100.0
+    # else:
+    #     criteria_threshold = 10
+    criteria_threshold = n_pairs * refinement_criteria / 100.0
 
     for _ in range(num_iterations):
+        # print(f"available pairs: {available_mask.sum()} / {n_pairs}")
         if not available_mask.any() or available_mask.sum() < criteria_threshold:
             break
 
         if count_entire:
             best_idx = np.argmax(entire_inlier_matrix.cpu().numpy() * available_mask).item()
+            available_inliers = inlier_matrix[:, available_mask].sum(dim=1).cpu().numpy()
+            if available_inliers[best_idx] < available_inlier_threshold:
+                available_mask[inlier_matrix[best_idx, :].cpu().numpy()] = False
+                continue
         else:
             available_inliers = inlier_matrix[:, available_mask].sum(dim=1).cpu().numpy()
             best_idx = np.argmax(available_inliers)

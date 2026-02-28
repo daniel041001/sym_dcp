@@ -5,14 +5,6 @@ import numpy as np
 import torch
 from tqdm import tqdm
 
-# try:
-#     from .RANSAC.rotation_RANSAC import _rotations_from_pairs_gpu
-# except ImportError:
-#     from symmetry_detection.RANSAC.rotation_RANSAC import _rotations_from_pairs_gpu
-
-# from .RANSAC.rotation_RANSAC import _rotations_from_pairs_gpu
-from .RANSAC.rotation_RANSAC_JH import _rotations_from_pairs_gpu
-
 
 def get_correspondences(
     inference_model: None,
@@ -39,6 +31,7 @@ def evaluate_rotation_symmetry_by_correspondence(
     inference_model: None,
     dist_threshold: float = 0.05,
     chamfer_threshold: float = 0.01,
+    count_entire: bool = False,
 ) -> Tuple[float, float, float, float]:
     device = inference_model.device
     precision_sum = 0.0
@@ -83,6 +76,10 @@ def evaluate_rotation_symmetry_by_correspondence(
         X_orig = X - X.mean(dim=0)
  
         # --------- GPU batched RANSAC ----------
+        if count_entire:
+            from .RANSAC.rotation_RANSAC_JH import _rotations_from_pairs_gpu
+        else:
+            from .RANSAC.rotation_RANSAC import _rotations_from_pairs_gpu
         axes_np, angles_np, chamfer_np = _rotations_from_pairs_gpu(
             base_corr_all,
             rotated_corr_all,

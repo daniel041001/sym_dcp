@@ -129,6 +129,7 @@ def _run_rotation(args, script_dir: str, repo_root: str):
         infer,
         dist_threshold=args.dist_threshold,
         chamfer_threshold=args.chamfer_threshold,
+        count_entire=args.count_entire,
     )
     print("\n=== Evaluation Results ===")
     print(f"Precision: {precision:.4f}")
@@ -163,6 +164,7 @@ def _run_reflection(args, script_dir: str):
         chamfer_threshold=args.chamfer_threshold,
         count_entire=args.count_entire,
         refinement_criteria=args.refinement_criteria,
+        available_inlier_threshold=args.available_inlier_threshold,
     )
     print(f"Precision: {precision:.4f}")
     print(f"Recall:    {recall:.4f}")
@@ -233,6 +235,12 @@ def main():
         type=float,
         default=10.0,
         help="(refl) Iterative RANSAC refinement criteria (%)",
+    )
+    parser.add_argument(
+        "--available_inlier_threshold",
+        type=int,
+        default=7,
+        help="(refl) Minimum inliers for a plane to be considered in RANSAC (default: 10, set to 0 to disable)",
     )
 
     # Rotation-specific args.

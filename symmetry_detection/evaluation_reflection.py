@@ -58,6 +58,7 @@ def evaluate_reflection_symmetry_by_correspondence(
     chamfer_threshold: float = 1e-3,
     count_entire: bool = False,
     refinement_criteria: float = 10.0,
+    available_inlier_threshold: int = 10,
 ) -> Tuple[float, float, float, float]:
     """
     Evaluate reflection symmetry detection using DCP correspondences.
@@ -148,7 +149,8 @@ def evaluate_reflection_symmetry_by_correspondence(
         I_matrix = np.eye(3, dtype=np.float32)
         n_np, d_np, _, chamfer_np = _planes_from_pairs(ref_corr_all, src_corr_all, I_matrix, X_orig, device, 
                                                         inlier_dist_threshold=0.007, num_iterations=100,
-                                                        count_entire=count_entire, refinement_criteria=refinement_criteria)
+                                                        count_entire=count_entire, refinement_criteria=refinement_criteria,
+                                                        available_inlier_threshold=available_inlier_threshold)
 
         # Process planes if any found
         if n_np.shape[0] > 0:
@@ -214,20 +216,25 @@ def evaluate_reflection_symmetry_by_correspondence(
             # Combine normal and offset distances: (num_pred, num_gt)
             metric = torch.sqrt(min_norm * min_norm + offset_dist * offset_dist)
             
-            # Match matrix: (num_pred, num_gt)
-            match_matrix = metric < dist_threshold
-            
-            # Precision: TP / #predicted
-            # TP = number of predicted planes that match at least one GT
-            matches_per_pred = match_matrix.any(dim=1)  # (num_pred,)
-            tp_precision = int(matches_per_pred.sum().item())
-            precision_sum += tp_precision / keep_normals.shape[0]
-            
-            # Recall: TP / #GT
-            # TP = number of GT planes that are matched by at least one prediction
-            matches_per_gt = match_matrix.any(dim=0)  # (num_gt,)
-            tp_recall = int(matches_per_gt.sum().item())
-            recall_sum += tp_recall / len(gt_normals_tensor)
+            precision_sum_per_threshold = 0.0
+            recall_sum_per_threshold = 0.0
+            for mutli_threshold in range(1, 5):
+                # Match matrix: (num_pred, num_gt)
+                match_matrix = metric < dist_threshold * mutli_threshold  # Adjust threshold for different levels of strictness
+                
+                # Precision: TP / #predicted
+                # TP = number of predicted planes that match at least one GT
+                matches_per_pred = match_matrix.any(dim=1)  # (num_pred,)
+                tp_precision = int(matches_per_pred.sum().item())
+                precision_sum_per_threshold += tp_precision / keep_normals.shape[0]
+                
+                # Recall: TP / #GT
+                # TP = number of GT planes that are matched by at least one prediction
+                matches_per_gt = match_matrix.any(dim=0)  # (num_gt,)
+                tp_recall = int(matches_per_gt.sum().item())
+                recall_sum_per_threshold += tp_recall / len(gt_normals_tensor)
+            precision_sum += precision_sum_per_threshold / 4.0
+            recall_sum += recall_sum_per_threshold / 4.0
             
             # Logging: compute min GT distance for each pred plane
             min_gt_dist_per_pred = metric.min(dim=1)[0]  # (num_pred,)
