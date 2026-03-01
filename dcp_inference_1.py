@@ -619,7 +619,7 @@ def evaluate_reflection_symmetry_by_correspondence(
         # Use identity matrix since src_corr_all is already transformed to original space
         I_matrix = np.eye(3, dtype=np.float32)
         n_np, d_np, _, chamfer_np = _planes_from_pairs(ref_corr_all, src_corr_all, I_matrix, X_orig, device, 
-                                                        inlier_dist_threshold=0.008, num_iterations=100)
+                                                        inlier_dist_threshold=0.007, num_iterations=100)
 
         # Process planes if any found
         if n_np.shape[0] > 0:
