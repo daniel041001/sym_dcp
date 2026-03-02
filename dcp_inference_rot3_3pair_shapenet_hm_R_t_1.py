@@ -556,7 +556,7 @@ class DCPInference:
 
         scores = torch.softmax(scores, dim=2).squeeze(0)  # (N,M)
 
-        topk = 20
+        topk = 30
         _, src_topk_indices = scores.topk(k=topk, dim=1)
         src_corr_mat = torch.zeros_like(scores, dtype=torch.bool)
         src_indices = torch.arange(scores.shape[0], device=scores.device).unsqueeze(1).expand(-1, topk)
@@ -720,10 +720,10 @@ def evaluate_rotation_symmetry_by_correspondence(
                     keep_axis_points = axis_points_batch[final_mask]
 
         if keep_axes is None or keep_axes.shape[0] == 0:
-            precision_sum += 1.0
+            precision_sum += 0.0
         else:
             # 3) axis NMS (chamfer 작은 것 우선)
-            axis_merge_threshold = 0.2
+            axis_merge_threshold = 0.5176
             order = torch.argsort(keep_chamfers)  # chamfer 오름차순
 
             selected_indices: List[int] = []
@@ -860,7 +860,7 @@ def main():
     parser.add_argument("--device", type=str, default="cuda:1", help="Device to use")
     parser.add_argument("--num_points", type=int, default=2048, help="Number of points per point cloud")
     parser.add_argument("--dist_threshold", type=float, default=0.05, help="Axis matching distance threshold")
-    parser.add_argument("--chamfer_threshold", type=float, default=0.005, help="Chamfer distance threshold")
+    parser.add_argument("--chamfer_threshold", type=float, default=0.0004, help="Chamfer distance threshold")
     parser.add_argument("--emb_nn", type=str, default="dgcnn", choices=["pointnet", "dgcnn"], help="Embedding network type")
     parser.add_argument("--pointer", type=str, default="transformer", choices=["identity", "transformer"], help="Pointer type")
     parser.add_argument("--head", type=str, default="svd", choices=["mlp", "svd"], help="Head type")
