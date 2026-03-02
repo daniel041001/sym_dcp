@@ -194,7 +194,7 @@ def main():
     )
     parser.add_argument("--device", type=str, default="cuda:0", help="Device to use")
     parser.add_argument("--dist_threshold", type=float, default=0.05, help="Distance threshold for matching")
-    parser.add_argument("--chamfer_threshold", type=float, default=0.0005, help="Chamfer distance threshold")
+    parser.add_argument("--chamfer_threshold", type=float, default=0.0004, help="Chamfer distance threshold")
     parser.add_argument(
         "--emb_nn",
         type=str,
