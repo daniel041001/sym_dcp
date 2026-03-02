@@ -556,7 +556,7 @@ class DCPInference:
 
         scores = torch.softmax(scores, dim=2).squeeze(0)  # (N,M)
 
-        topk = 30
+        topk = 40
         _, src_topk_indices = scores.topk(k=topk, dim=1)
         src_corr_mat = torch.zeros_like(scores, dtype=torch.bool)
         src_indices = torch.arange(scores.shape[0], device=scores.device).unsqueeze(1).expand(-1, topk)
@@ -685,7 +685,7 @@ def evaluate_rotation_symmetry_by_correspondence(
             X,
             device,
             inlier_dist_threshold=0.007,
-            num_iterations=30000,
+            num_iterations=50000,
             seed_pairs=2,
             batch_hyp=256,
             refine_iters=1,
