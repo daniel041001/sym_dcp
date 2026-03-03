@@ -855,7 +855,7 @@ def evaluate_rotation_symmetry_by_correspondence(
         X = torch.from_numpy(base).float().to(device)
 
         # --------- 2pair symmetry RANSAC + constraint refinement ----------
-        axes_np, angles_np, chamfer_np, axis_points_np = _rotations_from_pairs_gpu_fast(
+        axes_np, angles_np, chamfer_np, axis_points_np = _rotations_from_pairs_gpu(
             base_corr_all,
             rotated_corr_all,
             X,
