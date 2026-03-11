@@ -813,6 +813,8 @@ def evaluate_rotation_symmetry_by_correspondence(
     gt_lines: List[str] = []
     out_gt_path = osp.join(osp.dirname(__file__), "dcp_rotation_symmetry_shapenet.txt")
 
+    pred_axis_labels: List[str] = []
+    pred_point_labels: List[str] = []
     pbar = tqdm(range(total_samples), desc="Evaluating samples", dynamic_ncols=True)
     for i in pbar:
         pc = point_clouds[i].astype(np.float32)
@@ -959,6 +961,15 @@ def evaluate_rotation_symmetry_by_correspondence(
                     f"{angle:.6f}\t{chamfer_val:.6f}\t{min_metric:.6f}"
                 )
 
+        ## for visualization
+        if axes_np.shape[0] > 0 and chamfer_mask.any() and final_mask.any():
+            final_mask_np = final_mask.detach().cpu().numpy().astype(bool).reshape(-1)
+            pred_axis_labels.append(axes_np[final_mask_np][selected_indices].reshape(-1, 3))
+            pred_point_labels.append(axis_points_np[final_mask_np][selected_indices].reshape(-1, 3))
+        else:
+            pred_axis_labels.append(np.empty((0, 3), dtype=np.float32))
+            pred_point_labels.append(np.empty((0, 3), dtype=np.float32))
+
         done = i + 1
         pbar.set_postfix(
             corr=num_correspondences,
@@ -979,7 +990,7 @@ def evaluate_rotation_symmetry_by_correspondence(
     recall = recall_sum / total_samples if total_samples > 0 else 0.0
     f1 = 2 * precision * recall / (precision + recall) if (precision + recall) > 0 else 0.0
     avg_chamfer = low_chamfer_sum / low_chamfer_count if low_chamfer_count > 0 else 0.0
-    return precision, recall, f1, avg_chamfer
+    return precision, recall, f1, avg_chamfer, pred_axis_labels, pred_point_labels
 
 
 # ============================================================
@@ -1044,7 +1055,7 @@ def main():
     parser.add_argument("--emb_dims", type=int, default=512, help="Embedding dimensions")
     
     parser.add_argument("--count_entire", action="store_true", help="Count all valid hypotheses for whole point cloud (default: only correspondences)")
-    parser.add_argument("--topk", type=int, default=30, help="Top-k correspondences to consider for symmetry detection (default: 30)")
+    parser.add_argument("--topk", type=int, default=60, help="Top-k correspondences to consider for symmetry detection (default: 30)")
 
     parser.add_argument("--cache_file", type=str, default=None,
                         help="Pre-built pkl (point_clouds + gt_labels). Default: dcp/shapenet_rot_gt_cache.pkl")
@@ -1054,6 +1065,7 @@ def main():
                         help="ShapeNetCore.v2 경로 (캐시 없을 때만). Default: env 또는 repo/dcp 내 ShapeNetCore.v2")
     parser.add_argument("--max_samples", type=int, default=None,
                         help="최대 샘플 수 (None = 전부). 캐시 빌드/평가 둘 다 적용")
+    parser.add_argument("--visualization", action="store_true", help="Save visualization of predictions and GTs")
 
     args = parser.parse_args()
 
@@ -1118,7 +1130,7 @@ def main():
         topk=args.topk,
     )
 
-    precision, recall, f1, avg_ch = evaluate_rotation_symmetry_by_correspondence(
+    precision, recall, f1, avg_ch, pred_axis_labels, pred_point_labels = evaluate_rotation_symmetry_by_correspondence(
         point_clouds,
         gt_labels,
         infer,
@@ -1126,6 +1138,16 @@ def main():
         chamfer_threshold=args.chamfer_threshold,
         count_entire=args.count_entire,
     )
+
+    if args.visualization:
+        vis_dir = osp.join(script_dir, "vis_qual", "rotation")
+        from vis_qual.visualization_html_rotation import save_visualization
+        axis_for_vis = np.stack([
+            np.vstack([np.asarray(a).reshape(-1)[:3] for a in sample])
+            for sample in gt_labels
+        ]) 
+        save_visualization(point_clouds, axis_for_vis, np.zeros_like(axis_for_vis), vis_dir, prefix="gt")
+        save_visualization(point_clouds, pred_axis_labels, pred_point_labels, vis_dir, prefix="pred")
 
     print("\n=== Evaluation Results ===")
     print(f"Precision: {precision:.4f}")

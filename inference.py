@@ -139,7 +139,7 @@ def _run_rotation(args, script_dir: str, repo_root: str):
     print(f"\nEvaluated {len(pcs)} samples with rotation symmetry GT")
 
 
-def _run_reflection(args, script_dir: str):
+def _run_reflection(args, script_dir: str, visualization: bool = False):
     from model.DCP_reflection import DCPInference
     from symmetry_detection.evaluation_reflection import evaluate_reflection_symmetry_by_correspondence
 
@@ -155,7 +155,7 @@ def _run_reflection(args, script_dir: str):
     data_root = args.data_root or osp.join(script_dir, "data", "preprocessed_data_r")
     pcs, labels = load_preprocessed_dataset(data_root)
 
-    precision, recall, f1, avg_ch = evaluate_reflection_symmetry_by_correspondence(
+    precision, recall, f1, avg_ch, pred_labels = evaluate_reflection_symmetry_by_correspondence(
         pcs,
         labels,
         [],
@@ -166,6 +166,12 @@ def _run_reflection(args, script_dir: str):
         refinement_criteria=args.refinement_criteria,
         available_inlier_threshold=args.available_inlier_threshold,
     )
+
+    if visualization:
+        from vis_qual.visualization_html_reflection import save_visualization
+        save_visualization(pcs, labels, save_dir=osp.join(script_dir, "vis_qual", "reflection"), prefix="gt")
+        save_visualization(pcs, pred_labels, save_dir=osp.join(script_dir, "vis_qual", "reflection"), prefix="pred")
+
     print(f"Precision: {precision:.4f}")
     print(f"Recall:    {recall:.4f}")
     print(f"F1:        {f1:.4f}")
@@ -286,6 +292,7 @@ def main():
         default=None,
         help="(rot) Maximum samples for cache build/evaluation",
     )
+    parser.add_argument("--visualization", action="store_true", help="Save visualization of predictions and GTs")
 
     args = parser.parse_args()
 
@@ -299,11 +306,11 @@ def main():
         pass
 
     if args.task == "rotation":
-        _run_rotation(args, script_dir, repo_root)
+        _run_rotation(args, script_dir, repo_root, visualization=args.visualization)
     elif args.task == "reflection":
         if args.topk == 40:
             args.topk = 60
-        _run_reflection(args, script_dir)
+        _run_reflection(args, script_dir, visualization=args.visualization)
     else:
         print(f"Unsupported task: {args.task}")
         raise SystemExit(2)

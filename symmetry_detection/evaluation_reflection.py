@@ -78,6 +78,7 @@ def evaluate_reflection_symmetry_by_correspondence(
     gt_lines: List[str] = []
     out_gt_path = osp.join(osp.dirname(__file__), 'dcp_cluster_planes_inlier_xy_8.txt')
 
+    pred_labels: List[str] = []
     pbar = tqdm(range(total_samples), desc='Evaluating samples', dynamic_ncols=True)
     for i in pbar:
         pc = point_clouds[i].astype(np.float32)
@@ -166,14 +167,55 @@ def evaluate_reflection_symmetry_by_correspondence(
             filter_mask = chamfer_batch < chamfer_threshold
             
             if filter_mask.any():
-                # Apply filter (keep on GPU for efficiency)
-                pred_normals_torch = n_batch[filter_mask].unbind(0)
-                pred_ds = d_adjusted_batch[filter_mask].tolist()
-                pred_chamfers = chamfer_batch[filter_mask].tolist()
+                # Apply initial chamfer filter (keep on GPU for efficiency)
+                n_filtered = n_batch[filter_mask]                 # (Kf, 3)
+                d_filtered = d_adjusted_batch[filter_mask]        # (Kf,)
+                chamfer_filtered = chamfer_batch[filter_mask]     # (Kf,)
+                
+                # --- NMS based on normal similarity and chamfer distance ---
+                # If angle between normals <= pi/6, keep only the plane with smallest chamfer.
+                num_planes = n_filtered.shape[0]
+                if num_planes > 0:
+                    # Normalize normals
+                    normals_norm = n_filtered / (n_filtered.norm(dim=1, keepdim=True) + 1e-8)
+                    # Cosine similarity matrix (absolute to be sign-invariant)
+                    sim = torch.abs(normals_norm @ normals_norm.T)  # (Kf, Kf)
+                    cos_thresh = torch.cos(torch.tensor(np.pi / 6, dtype=torch.float32, device=device))
+                    
+                    # Greedy NMS: sort by chamfer ascending, keep best and suppress similar ones
+                    _, order = torch.sort(chamfer_filtered)  # indices into [0, Kf)
+                    keep_mask = torch.zeros(num_planes, dtype=torch.bool, device=device)
+                    suppressed = torch.zeros(num_planes, dtype=torch.bool, device=device)
+                    for idx in order:
+                        idx_int = int(idx.item())
+                        if suppressed[idx_int]:
+                            continue
+                        # keep this plane
+                        keep_mask[idx_int] = True
+                        # suppress planes with similar normals (angle <= pi/6)
+                        close = sim[idx_int] >= cos_thresh
+                        suppressed = suppressed | close
+                    
+                    n_nms = n_filtered[keep_mask]
+                    d_nms = d_filtered[keep_mask]
+                    chamfer_nms = chamfer_filtered[keep_mask]
+                    
+                    pred_normals_torch = n_nms.unbind(0)
+                    pred_ds = d_nms.tolist()
+                    pred_chamfers = chamfer_nms.tolist()
+                else:
+                    pred_normals_torch = []
+                    pred_ds = []
+                    pred_chamfers = []
             else:
                 pred_normals_torch = []
                 pred_ds = []
                 pred_chamfers = []
+
+        if n_np.shape[0] > 0 and filter_mask.any() and num_planes > 0:
+            pred_labels.append(np.hstack([n_nms.detach().cpu().numpy().reshape(-1, 3), d_nms.detach().cpu().numpy().reshape(-1, 1)]))
+        else:
+            pred_labels.append(np.empty((0, 4), dtype=np.float32))
 
         if len(pred_normals_torch) == 0:
             precision_sum += 1  # same handling as inference.py
@@ -275,4 +317,4 @@ def evaluate_reflection_symmetry_by_correspondence(
     recall = recall_sum / total_samples if total_samples > 0 else 0.0
     f1 = 2 * precision * recall / (precision + recall) if (precision + recall) > 0 else 0.0
     avg_chamfer = low_chamfer_sum / low_chamfer_count if low_chamfer_count > 0 else 0.0
-    return precision, recall, f1, avg_chamfer
+    return precision, recall, f1, avg_chamfer, pred_labels
