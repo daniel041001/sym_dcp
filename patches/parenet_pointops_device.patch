@@ -1,0 +1,20 @@
+diff --git a/pareconv/extensions/pointops/functions/pointops.py b/pareconv/extensions/pointops/functions/pointops.py
+index 1d18d5f..8c64a6e 100644
+--- a/pareconv/extensions/pointops/functions/pointops.py
++++ b/pareconv/extensions/pointops/functions/pointops.py
+@@ -480,9 +480,12 @@ class KNNQuery_Heap(Function):
+         assert new_xyz.is_contiguous()
+         b, m, _ = new_xyz.size()
+         n = xyz.size(1)
+-        idx = torch.cuda.IntTensor(b, m, nsample).zero_()
+-        dist2 = torch.cuda.FloatTensor(b, m, nsample).zero_()
+-        pointops_cuda.knnquery_heap_cuda(b, n, m, nsample, xyz, new_xyz, idx, dist2)
++        device = xyz.device
++        idx = torch.zeros(b, m, nsample, dtype=torch.int32, device=device)
++        dist2 = torch.zeros(b, m, nsample, dtype=torch.float32, device=device)
++        # 커널이 default GPU(cuda:0)가 아니라 입력 텐서가 있는 GPU에서 launch되도록 강제
++        with torch.cuda.device(device):
++            pointops_cuda.knnquery_heap_cuda(b, n, m, nsample, xyz, new_xyz, idx, dist2)
+         ctx.mark_non_differentiable(idx)
+         return idx.long()
+ 
